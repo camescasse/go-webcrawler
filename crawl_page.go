@@ -7,22 +7,25 @@ import (
 	"net/url"
 )
 
-func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) (map[string]int, error) {
+func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
 	baseURL, err := url.Parse(rawBaseURL)
 	if err != nil {
-		return nil, err
+		fmt.Println("error parsing base url:", err)
+		return
 	}
 	currentURL, err := url.Parse(rawCurrentURL)
 	if err != nil {
-		return nil, err
+		fmt.Println("error parsing current url:", err)
+		return
 	}
 	if baseURL.Host != currentURL.Host {
-		return pages, nil
+		return
 	}
 
 	currentNormalized, err := normalizeURL(rawCurrentURL)
 	if err != nil {
-		return pages, err
+		fmt.Println("error normalizing current url:", err)
+		return
 	}
 
 	_, ok := pages[currentNormalized]
@@ -34,31 +37,36 @@ func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) (map[stri
 
 	res, err := http.Get(rawCurrentURL)
 	if err != nil {
-		return pages, err
+		fmt.Println("error getting http body:", err)
+		return
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 400 {
-		return pages, fmt.Errorf("error fetching %s: status code %d", rawCurrentURL, res.StatusCode)
+		fmt.Printf("error fetching %s: status code: %d\n", rawCurrentURL, res.StatusCode)
+		return
 	}
 
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return pages, err
+		fmt.Println("error reading data:", err)
+		return
 	}
 
 	htmlContent := string(data)
 
-	fmt.Println("crawling: ", rawCurrentURL)
+	fmt.Println("crawling:", rawCurrentURL)
 	result, err := getURLsFromHTML(htmlContent, rawCurrentURL)
 	if err != nil {
-		return pages, err
+		fmt.Println("error crawling site:", err)
+		return
 	}
 
 	for _, page := range result {
 		currentNormalized, err := normalizeURL(page)
 		if err != nil {
-			return pages, err
+			fmt.Println("error normalizing current url:", err)
+			return
 		}
 
 		if _, ok := pages[currentNormalized]; ok {
@@ -66,12 +74,6 @@ func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) (map[stri
 			continue
 		}
 
-		_, err = crawlPage(rawBaseURL, page, pages)
-		if err != nil {
-			fmt.Printf("error crawling %s: %v\n", page, err)
-			continue
-		}
+		crawlPage(rawBaseURL, page, pages)
 	}
-
-	return pages, nil
 }
