@@ -36,7 +36,7 @@ func main() {
 	}
 
 	fmt.Printf("starting crawl of: %s...\n", config.baseURL.String())
-	config.crawlPage(config.baseURL.String())
+	config.crawlPage(config.baseURL)
 
 	fmt.Println()
 	fmt.Println("results:")

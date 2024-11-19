@@ -7,17 +7,12 @@ import (
 	"net/url"
 )
 
-func (config *config) crawlPage(rawCurrentURL string) {
-	currentURL, err := url.Parse(rawCurrentURL)
-	if err != nil {
-		fmt.Println("error parsing current url:", err)
-		return
-	}
+func (config *config) crawlPage(currentURL *url.URL) {
 	if config.baseURL.Host != currentURL.Host {
 		return
 	}
 
-	currentNormalized, err := normalizeURL(rawCurrentURL)
+	currentNormalized, err := normalizeURL(currentURL.String())
 	if err != nil {
 		fmt.Println("error normalizing current url:", err)
 		return
@@ -30,7 +25,7 @@ func (config *config) crawlPage(rawCurrentURL string) {
 		config.pages[currentNormalized] = 1
 	}
 
-	res, err := http.Get(rawCurrentURL)
+	res, err := http.Get(currentURL.String())
 	if err != nil {
 		fmt.Println("error getting http body:", err)
 		return
@@ -38,7 +33,7 @@ func (config *config) crawlPage(rawCurrentURL string) {
 	defer res.Body.Close()
 
 	if res.StatusCode >= 400 {
-		fmt.Printf("error fetching %s: status code: %d\n", rawCurrentURL, res.StatusCode)
+		fmt.Printf("error fetching %s: status code: %d\n", currentNormalized, res.StatusCode)
 		return
 	}
 
@@ -50,14 +45,19 @@ func (config *config) crawlPage(rawCurrentURL string) {
 
 	htmlContent := string(data)
 
-	fmt.Println("crawling:", rawCurrentURL)
-	result, err := getURLsFromHTML(htmlContent, rawCurrentURL)
+	fmt.Println("crawling:", currentNormalized)
+	foundURLs, err := getURLsFromHTML(htmlContent, currentURL)
 	if err != nil {
 		fmt.Println("error crawling site:", err)
 		return
 	}
 
-	for _, page := range result {
-		config.crawlPage(page)
+	for _, page := range foundURLs {
+		parsedPage, err := url.Parse(page)
+		if err != nil {
+			fmt.Println("error parsing url:", err)
+			return
+		}
+		config.crawlPage(parsedPage)
 	}
 }
