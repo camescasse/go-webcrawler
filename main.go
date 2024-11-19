@@ -2,8 +2,18 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"sync"
 )
+
+type config struct {
+	pages              map[string]int
+	baseURL            *url.URL
+	mu                 *sync.Mutex
+	concurrencyControl chan struct{}
+	wg                 *sync.WaitGroup
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -14,15 +24,23 @@ func main() {
 		fmt.Println("too many arguments provided")
 		os.Exit(1)
 	}
-	rawBaseURL := os.Args[1]
+	rawBaseURL, err := url.Parse(os.Args[1])
+	if err != nil {
+		fmt.Println("error parsing argument:", err)
+		os.Exit(1)
+	}
 
-	fmt.Printf("starting crawl of: %s...\n", rawBaseURL)
-	pages := map[string]int{}
-	crawlPage(rawBaseURL, rawBaseURL, pages)
+	config := config{
+		pages:   make(map[string]int),
+		baseURL: rawBaseURL,
+	}
+
+	fmt.Printf("starting crawl of: %s...\n", config.baseURL.String())
+	config.crawlPage(config.baseURL.String())
 
 	fmt.Println()
 	fmt.Println("results:")
-	for page, count := range pages {
+	for page, count := range config.pages {
 		fmt.Printf("%s: %d\n", page, count)
 	}
 

@@ -7,18 +7,13 @@ import (
 	"net/url"
 )
 
-func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
-	baseURL, err := url.Parse(rawBaseURL)
-	if err != nil {
-		fmt.Println("error parsing base url:", err)
-		return
-	}
+func (config *config) crawlPage(rawCurrentURL string) {
 	currentURL, err := url.Parse(rawCurrentURL)
 	if err != nil {
 		fmt.Println("error parsing current url:", err)
 		return
 	}
-	if baseURL.Host != currentURL.Host {
+	if config.baseURL.Host != currentURL.Host {
 		return
 	}
 
@@ -28,11 +23,11 @@ func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
 		return
 	}
 
-	_, ok := pages[currentNormalized]
-	if ok {
-		pages[currentNormalized]++
+	if _, ok := config.pages[currentNormalized]; ok {
+		config.pages[currentNormalized]++
+		return
 	} else {
-		pages[currentNormalized] = 1
+		config.pages[currentNormalized] = 1
 	}
 
 	res, err := http.Get(rawCurrentURL)
@@ -63,17 +58,6 @@ func crawlPage(rawBaseURL, rawCurrentURL string, pages map[string]int) {
 	}
 
 	for _, page := range result {
-		currentNormalized, err := normalizeURL(page)
-		if err != nil {
-			fmt.Println("error normalizing current url:", err)
-			return
-		}
-
-		if _, ok := pages[currentNormalized]; ok {
-			pages[currentNormalized]++
-			continue
-		}
-
-		crawlPage(rawBaseURL, page, pages)
+		config.crawlPage(page)
 	}
 }
