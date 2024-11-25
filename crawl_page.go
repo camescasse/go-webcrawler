@@ -2,62 +2,53 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 )
 
-func (config *config) crawlPage(currentURL *url.URL) {
-	if config.baseURL.Host != currentURL.Host {
+func (config *config) crawlPage(rawCurrentURL string) {
+	config.concurrencyControl <- struct{}{}
+	defer func() {
+		<-config.concurrencyControl
+		config.wg.Done()
+	}()
+
+	currentURL, err := url.Parse(rawCurrentURL)
+	if err != nil {
+		fmt.Printf("error parsing raw url '%s': %v\n", rawCurrentURL, err)
 		return
 	}
 
-	currentNormalized, err := normalizeURL(currentURL.String())
+	if config.baseURL.Hostname() != currentURL.Hostname() {
+		return
+	}
+
+	normalizedURL, err := normalizeURL(currentURL.String())
 	if err != nil {
 		fmt.Println("error normalizing current url:", err)
 		return
 	}
 
-	if _, ok := config.pages[currentNormalized]; ok {
-		config.pages[currentNormalized]++
+	isFirst := config.addPageVisit(normalizedURL)
+	if !isFirst {
 		return
-	} else {
-		config.pages[currentNormalized] = 1
 	}
 
-	res, err := http.Get(currentURL.String())
+	fmt.Println("crawling:", rawCurrentURL)
+
+	html, err := getHTML(rawCurrentURL)
 	if err != nil {
-		fmt.Println("error getting http body:", err)
-		return
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode >= 400 {
-		fmt.Printf("error fetching %s: status code: %d\n", currentNormalized, res.StatusCode)
+		fmt.Printf("error getting page html for '%s': %v\n", rawCurrentURL, err)
 		return
 	}
 
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("error reading data:", err)
-		return
-	}
-
-	htmlContent := string(data)
-
-	fmt.Println("crawling:", currentNormalized)
-	foundURLs, err := getURLsFromHTML(htmlContent, currentURL)
+	foundURLs, err := getURLsFromHTML(html, config.baseURL)
 	if err != nil {
 		fmt.Println("error crawling site:", err)
 		return
 	}
 
-	for _, page := range foundURLs {
-		parsedPage, err := url.Parse(page)
-		if err != nil {
-			fmt.Println("error parsing url:", err)
-			return
-		}
-		config.crawlPage(parsedPage)
+	for _, nextURL := range foundURLs {
+		config.wg.Add(1)
+		go config.crawlPage(nextURL)
 	}
 }
